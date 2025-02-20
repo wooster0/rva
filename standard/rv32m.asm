@@ -1,0 +1,8 @@
+@instruction mul r [0b0110011, 0b000, 0b0000001]
+@instruction mulh r [0b0110011, 0b001, 0b0000001]
+@instruction mulhsu r [0b0110011, 0b010, 0b0000001]
+@instruction mulhu r [0b0110011, 0b011, 0b0000001]
+@instruction div r [0b0110011, 0b100, 0b0000001]
+@instruction divu r [0b0110011, 0b101, 0b0000001]
+@instruction rem r [0b0110011, 0b110, 0b0000001]
+@instruction remu r [0b0110011, 0b111, 0b0000001]

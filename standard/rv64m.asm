@@ -1,0 +1,5 @@
+@instruction mulw r [0b0111011, 0b000, 0b0000001]
+@instruction divw r [0b0111011, 0b100, 0b0000001]
+@instruction divuw r [0b0111011, 0b101, 0b0000001]
+@instruction remw r [0b0111011, 0b110, 0b0000001]
+@instruction remuw r [0b0111011, 0b111, 0b0000001]

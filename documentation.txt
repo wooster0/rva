@@ -1,0 +1,456 @@
+RVA
+===
+
+RVA stands for RISC-V Assembler.
+
+RVA generates RISC-V machine code from source files.
+
+This document describes the assembly language used for source files.
+
+Table of contents (00)
+-----------------
+
+(00) Table of contents
+(01) Values
+(02) Variables
+(03) Constants
+(04) Labels
+(05) Operators
+(06) Here
+(07) Block operands
+(08) Directives
+(09) Importable definitions
+(10) Assembly time block invocation
+(11) Standard source files
+(12) Names
+(13) Statements
+(14) String literals
+(15) Instructions
+(16) Pseudoinstructions
+(17) Scopes
+
+To navigate between sections, search (NN.
+
+Values (01)
+------
+
+There are different types of values:
+
+* Integer: 64 bits.
+  Syntax examples:
+  10     -> 10
+  0xa    -> 10
+  0xA    -> 10
+  0b1010 -> 10
+  'A'    -> 65
+
+* Register: any register: x0-x31.
+  Syntax:
+  Name  x0   x1  x2  x3  x4  x5  x6  x7  x8    x9  x10 x11 x12 x13 x14 x15
+  Alias zero ra  sp  gp  tp  t0  t1  t2  s0/fp s1  a0  a1  a2  a3  a4  a5
+
+  Name  x16  x17 x18 x19 x20 x21 x22 x23 x24   x25 x26 x27 x28 x29 x30 x31
+  Alias a6   a7  s2  s3  s4  s5  s6  s7  s8    s9  s10 s11 t3  t4  t5  t6
+
+* Block: any code.
+  Syntax: {}
+
+* List: any values.
+  Syntax examples:
+  [10, x0, {}, 'A']
+  "Hello world"
+
+* Unknown: unspecified.
+  Syntax: ?
+
+Variables (02)
+---------
+
+A local variable can hold a value.
+The assignment operator is used to define variables:
+
+```
+a = 123          # Integer
+b = x0           # Register
+c = { @log 123 } # Block
+d = [a, b, c]    # List
+e = ?            # Unknown
+```
+
+Unused (i.e. never read) local variables are an error.
+
+Defining a variable again is allowed.
+
+Constants (03)
+---------
+
+A constant is the same as a variable except that it can be used in a source file different from the one it was defined in:
+
+a.asm:
+```
+$x = 123
+```
+
+b.asm:
+```
+@import "a.asm"
+
+@log $x # a.asm:3:1: 123
+```
+
+Constants are the "export" complement to @import.
+
+Defining a constant again is an error.
+
+Labels (04)
+------
+
+A label marks a section of code:
+
+```
+@import "rv32i"
+
+exit:
+    addi a7, zero, 94
+    addi a0, zero, 0
+    ecall
+```
+
+A relative label reference :label results in an integer, being the relative offset from definition to reference.
+An absolute label reference ::label results in an integer, being the absolute address of that label.
+
+Unused (i.e. never referenced) labels are an error.
+
+Defining a label again is an error.
+
+Operators (05)
+---------
+
+Operators can be used to operate on values:
+
+=      Assignment operator
++      Addition operator
+-      Subtraction or negation operator
+*      Multiplication operator
+/      Division operator
+%      Modulo operator
+&      Bitwise AND operator
+|      Bitwise OR operator
+^      Bitwise XOR operator
+! or ~ Bitwise NOT operator
+.      Index operator
+.@     Length index operator
+++     Concatenation operator
+**     Duplication operator
+
+* Integers can be operated on using: + - * / % & | ^ ! ~
+
+  Example:
+  ```
+  x = 5 * 5          # 25
+  y = (75 + 75) + 50 # 200
+  z = (y / x) / 2    # 4
+  ```
+
+* Registers can not be operated on.
+
+* Blocks can not be operated on.
+
+* Lists can be operated on using: . .@ ++ **
+
+  Example:
+  ```
+  a = [0, 50, 100] # [0, 50, 100]
+  b = a.1          # 50
+  c = a.2          # 100
+  d = [c, b, 0]    # [100, 50, 0]
+  e = a ++ d       # [0, 50, 100, 100, 50, 0]
+  f = e ** "AA".@  # [0, 50, 100, 100, 50, 0, 0, 50, 100, 100, 50, 0]
+  ```
+
+  .  indexes a list's element using an index and yields it.
+  .@ indexes a list's special length element and yields it.
+  ++ concatenates two lists to form a new list.
+  ** duplicates a list a number of times to form a new list.
+
+* Unknown can not be operated on.
+
+Here (06)
+----
+
+@@ is called "here" and represents the current address.
+
+Block operand (07)
+-------------
+
+A block when inlined or invoked through @inline or @invoke can optionally have a value passed to it:
+
+```
+square = {
+    @log $$ * $$
+}
+
+@invoke square 5 # :2:5: 25
+
+add = {
+    a = $$.0
+    b = $$.1
+    @log a + b
+}
+
+@invoke add [10, 10] # :10:5: 20
+```
+
+Directives (08)
+----------
+
+Directives are statements that represent assembly time operations.
+
+* @bits:              expects an integer being 32 or 64 specifying the bit size to use for registers and instructions.
+* @origin:            expects an integer literal and uses it as the current address.
+* @bytes:             expects a list literal of bytes and writes them at the current position in order.
+* @byte:              expects an integer of 8 bits and writes them at the current position in little-endian.
+* @half:              expects an integer of 16 bits and writes them at the current position in little-endian.
+* @word:              expects an integer of 32 bits and writes them at the current position in little-endian.
+* @double:            expects an integer of 64 bits and writes them at the current position in little-endian.
+* @invoke:            expects a block and optionally a value and invokes the block, passing the value as an operand if any.
+* @inline:            expects a block and optionally a value and inlines the block, passing the value as an operand if any.
+* @pseudoinstruction: expects a mnemonic and a block to define a pseudoinstruction.
+* @instruction:       expects a mnemonic, a type, and a list of integers to define an instruction.
+* @import:            expects a string literal and uses it to import a file.
+* @log:               expects a value and prints it to the terminal.
+
+Importable definitions (09)
+----------------------
+
+Constants, instruction, and pseudoinstruction defined in the root scope can be imported into a different source file using @import.
+
+An instruction or pseudoinstruction with the same name can be imported multiple times.
+A constants with the same name can not be imported multiple times.
+
+Assembly time block invocation (10)
+------------------------------
+
+Block invocation refers to evaluating blocks at assembly time.
+Instructions invokable at assembly time are limited to instructions included in RV32I, RV64I, RV32M, and RV64M.
+
+Block invocation happens with a bit size of 64, regardless of the bit size specified by @bits.
+
+Everything inside an invocation block is invoked at assembly time, including @inline statements,
+which means in this case a block will not in fact be emitted to the binary.
+
+In an invoke context all registers and memory is initially zero.
+
+To read or write a register's value use this syntax: <register>
+
+Example:
+```
+@import "rv32i"
+
+@invoke {
+    a = 5
+    <x4> = a
+    addi x4, x4, 20
+    a = <x4>
+    @log a # :8:5: 25
+};
+```
+
+Standard source files (11)
+---------------------
+
+There are source files that are available by default.
+
+The standard includes:
+
+* rv32i.asm: RV32I instruction definitions.
+* rv64i.asm: RV64I instruction definitions.
+* rv32m.asm: RV32M instruction definitions.
+* rv64m.asm: RV64M instruction definitions.
+
+The standard also includes:
+
+* pseudoinstructions.asm: pseudoinstruction definitions for RV32I, RV64I, RV32M, and RV64M instructions.
+* elf.asm: an ELF (Executable and Linkable Format) header block that can be inlined into a program to make it executable on certain systems.
+
+Standard source files can be imported by using @import and omitting the ".asm" file extension:
+
+```
+@import "rv32i"
+
+addi x8, x8, 10
+```
+
+Names (12)
+-----
+
+Variable, constant, label, directive, register, instruction, pseudoinstruction, and standard source file names are case-insensitive:
+
+```
+@IMPORT "rv32i"
+@import "PSEUDOINSTRUCTIONS"
+
+ADDI x4, x4, 10
+not X4, X4
+
+label:
+@log :LABEL
+
+xYz = [1, 0, 3]
+XyZ.1 = 2
+@LOG XyZ
+
+$AbC = 10
+@log $AbC
+```
+
+Non-standard source files are case-sensitive.
+
+Statements (13)
+----------
+
+Each source file contains a list of statements.
+
+A statement is a line of the following forms:
+
+* variable = ...
+* variable.index = ...
+* $constant = ...
+* $$.index = ...
+* @directive ...
+* label:
+* <register> = ...
+* instruction ...
+
+Some directives (@inline and @invoke) as well as instructions might take an operand or take no operand.
+
+Sometimes this causes slight ambiguities such as:
+
+```
+@invoke {}
+variable = 123
+```
+Or:
+```
+ecall
+variable = 123
+```
+
+You might read the first example as `@invoke {} variable` followed by the result of that being assigned to 123.
+You might read the second example as `ecall variable` followed by the result of that being assigned to 123.
+
+In the case of no operand, an explicit statement end marker in form of a semicolon is required:
+
+```
+@invoke {};
+variable = 123
+```
+And:
+```
+ecall;
+variable = 123
+```
+
+String literals (14)
+---------------
+
+There are single-line and multi-line string literals.
+String literals evaluate to lists.
+
+A single-line string literal uses this syntax: "..."
+A multi-line string literal uses this syntax: ```
+                                              ...
+                                              ```
+
+Example:
+```
+@log ```
+     hello
+     world
+     ```
+@log ("hello" ++ [0xA]) ++ "world"
+```
+
+Both `@log`s are the same.
+
+Note that the indentation must be the same for all lines part of a multi-line string.
+
+Instructions (15)
+------------
+
+Defining an instruction again is an error.
+
+Pseudoinstructions (16)
+------------------
+
+Defining a pseudoinstruction again is an error.
+
+Scopes (17)
+------
+
+Variables, labels, constants, instructions, and pseudoinstructions can only be defined and accessed in specific scopes of a source file.
+Every source file has a root scope by default, which is the one outside of any block.
+Additional scopes can be defined using blocks.
+
+A variable can be defined in any scope and is then available in all child scopes, but not parent scopes.
+A label can be defined in any scope and is then available only in the scope it was defined in, not in parent or child scopes.
+A constant, instruction, or pseudoinstruction can be defined in only the root scope and is then available in all scopes.
+
+Example:
+```
+# Label `b` is not accessible in this root scope.
+
+x = 123
+
+a:
+
+y = {
+    # Label `a` is not accessible in this block.
+
+    @log x
+
+    b:
+
+    z = {
+        # Labels `a` and `b` are not accessible in this block.
+
+        @log x
+    }
+}
+
+@log :a
+@log x
+```
+
+Bit size (18)
+--------
+
+The @bits directive specifies the bit size to use for emitted instructions.
+
+This has no effect on the bit size of integer values, invoked instructions or registers in an invoke context.
+Integer values as well as instructions and registers in an invoke context always use a bit size of 64.
+
+This effectively only changes the value of the special $bits constant which can not be changed otherwise.
+
+Accessing $bits before setting it using @bits at least once is an error.
+
+Copying values (19)
+--------------
+
+When assigning a variable to a different one, a shallow copy occurs:
+
+```
+string = "abc"
+alias = string
+string.0 = 'A'
+@log alias # :4:1: Abc
+```
+
+To perform a deep copy:
+
+```
+string = "abc"
+copy = [string.0, string.1, string.2]
+string.0 = 'A'
+@log copy # :4:1: abc
+```
